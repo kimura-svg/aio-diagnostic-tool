@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AIO診断レポート | EUPHONY</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@500;700&family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#F1EEE3;
+    --paper-raised:#F8F6EE;
+    --ink:#1B1F2A;
+    --ink-soft:#4B4F58;
+    --rule:#D6D0BC;
+    --seal:#A8342A;
+    --seal-dark:#7C231B;
+    --gold:#A6813C;
+    --good:#43604F;
+    --warn:#A6813C;
+    --bad:#A8342A;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'Noto Sans JP', sans-serif;
+    min-height:100vh;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    padding:48px 20px 80px;
+    background-image:
+      radial-gradient(circle at 1px 1px, rgba(27,31,42,0.05) 1px, transparent 0);
+    background-size:22px 22px;
+  }
+  .brandbar{
+    width:100%;
+    max-width:760px;
+    display:flex;
+    justify-content:space-between;
+    align-items:baseline;
+    margin-bottom:28px;
+    padding-bottom:14px;
+    border-bottom:1px solid var(--rule);
+  }
+  .brandbar .mark{
+    font-family:'Shippori Mincho', serif;
+    font-weight:700;
+    font-size:15px;
+    letter-spacing:0.18em;
+    color:var(--ink);
+  }
+  .brandbar .sub{
+    font-family:'JetBrains Mono', monospace;
+    font-size:11px;
+    letter-spacing:0.05em;
+    color:var(--ink-soft);
+  }
+  .sheet{
+    width:100%;
+    max-width:760px;
+    background:var(--paper-raised);
+    border:1px solid var(--rule);
+    box-shadow:0 1px 0 rgba(0,0,0,0.02), 0 12px 32px -20px rgba(27,31,42,0.35);
+    position:relative;
+  }
+  .sheet::before{
+    content:"";
+    position:absolute;
+    inset:6px;
+    border:1px solid rgba(27,31,42,0.08);
+    pointer-events:none;
+  }
+  .sheet-inner{ padding:40px 44px 44px; }
+  .title-block{ text-align:center; margin-bottom:32px; }
+  .title-block .eyebrow{
+    font-family:'JetBrains Mono', monospace;
+    font-size:11px;
+    letter-spacing:0.28em;
+    color:var(--seal);
+    margin-bottom:10px;
+  }
+  .title-block h1{
+    font-family:'Shippori Mincho', serif;
+    font-weight:700;
+    font-size:28px;
+    margin:0;
+    letter-spacing:0.04em;
+  }
+  .title-block p{
+    font-size:13px;
+    color:var(--ink-soft);
+    margin:10px 0 0;
+    line-height:1.7;
+  }
+
+  /* --- input --- */
+  .input-row{
+    display:flex;
+    gap:10px;
+    margin-top:28px;
+  }
+  .input-row input{
+    flex:1;
+    padding:14px 16px;
+    font-size:14px;
+    font-family:'JetBrains Mono', monospace;
+    background:#fff;
+    border:1px solid var(--rule);
+    color:var(--ink);
+    outline:none;
+  }
+  .input-row input:focus{ border-color:var(--ink); }
+  .input-row button{
+    padding:14px 26px;
+    background:var(--ink);
+    color:var(--paper-raised);
+    border:none;
+    font-family:'Noto Sans JP', sans-serif;
+    font-weight:700;
+    font-size:14px;
+    letter-spacing:0.05em;
+    cursor:pointer;
+    transition:background .15s ease;
+    white-space:nowrap;
+  }
+  .input-row button:hover{ background:var(--seal-dark); }
+  .input-row button:disabled{ background:var(--rule); cursor:not-allowed; color:var(--ink-soft); }
+  .hint{ font-size:11.5px; color:var(--ink-soft); margin-top:10px; line-height:1.6; }
+
+  /* --- loading --- */
+  #loading{ display:none; margin-top:30px; }
+  .scanlog{
+    font-family:'JetBrains Mono', monospace;
+    font-size:12px;
+    color:var(--ink-soft);
+    background:#fff;
+    border:1px solid var(--rule);
+    padding:16px 18px;
+    min-height:120px;
+    line-height:1.9;
+  }
+  .scanlog div{ opacity:0; animation:fadein .25s ease forwards; }
+  .scanlog .ok{ color:var(--good); }
+  @keyframes fadein{ to{ opacity:1; } }
+
+  /* --- error --- */
+  #errorBox{ display:none; margin-top:24px; padding:16px 18px; border:1px solid var(--seal); background:#FBEEEC; font-size:13px; color:var(--seal-dark); line-height:1.7; }
+
+  /* --- report --- */
+  #report{ display:none; margin-top:8px; }
+  .report-meta{
+    display:flex;
+    justify-content:space-between;
+    font-family:'JetBrains Mono', monospace;
+    font-size:11px;
+    color:var(--ink-soft);
+    border-bottom:1px dashed var(--rule);
+    padding-bottom:14px;
+    margin-bottom:30px;
+    flex-wrap:wrap;
+    gap:6px;
+  }
+  .seal-wrap{
+    display:flex;
+    justify-content:center;
+    margin:10px 0 36px;
+  }
+  .seal{
+    width:172px;
+    height:172px;
+    position:relative;
+    transform:scale(1.2) rotate(-9deg);
+    opacity:0;
+  }
+  .seal.stamped{
+    animation:stamp .5s cubic-bezier(.2,.8,.3,1.1) forwards;
+  }
+  @keyframes stamp{
+    0%{ transform:scale(1.35) rotate(-14deg); opacity:0; }
+    55%{ transform:scale(0.96) rotate(2deg); opacity:1; }
+    100%{ transform:scale(1) rotate(-4deg); opacity:1; }
+  }
+  .seal svg{ width:100%; height:100%; display:block; }
+  .seal-score{
+    position:absolute;
+    inset:0;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    font-family:'JetBrains Mono', monospace;
+    color:var(--seal);
+    transform:rotate(-4deg);
+  }
+  .seal-score .num{ font-size:40px; font-weight:700; line-height:1; }
+  .seal-score .den{ font-size:11px; letter-spacing:0.1em; margin-top:2px; }
+
+  .cat{
+    margin-bottom:22px;
+  }
+  .cat-head{
+    display:flex;
+    justify-content:space-between;
+    align-items:baseline;
+    margin-bottom:8px;
+  }
+  .cat-head .name{
+    font-family:'Shippori Mincho', serif;
+    font-weight:500;
+    font-size:15px;
+  }
+  .cat-head .no{
+    font-family:'JetBrains Mono', monospace;
+    font-size:11px;
+    color:var(--ink-soft);
+    margin-right:8px;
+  }
+  .cat-head .score{
+    font-family:'JetBrains Mono', monospace;
+    font-size:13px;
+    font-weight:700;
+  }
+  .bar-track{
+    height:8px;
+    background:#E7E2D2;
+    position:relative;
+    overflow:hidden;
+    margin-bottom:12px;
+  }
+  .bar-fill{
+    height:100%;
+    width:0%;
+    background:var(--ink);
+    transition:width 1s cubic-bezier(.2,.8,.2,1);
+  }
+  .notes{ list-style:none; margin:0; padding:0; }
+  .notes li{
+    font-size:12.5px;
+    line-height:1.8;
+    padding-left:20px;
+    position:relative;
+    color:var(--ink-soft);
+  }
+  .notes li::before{
+    position:absolute; left:0; top:0;
+    font-family:'JetBrains Mono', monospace;
+    font-weight:700;
+  }
+  .notes li.pass::before{ content:"✓"; color:var(--good); }
+  .notes li.warn::before{ content:"△"; color:var(--warn); }
+  .notes li.fail::before{ content:"✗"; color:var(--bad); }
+
+  hr.div{ border:none; border-top:1px dashed var(--rule); margin:28px 0; }
+
+  .inspector{ }
+  .inspector h2{
+    font-family:'JetBrains Mono', monospace;
+    font-size:11px;
+    letter-spacing:0.18em;
+    color:var(--ink-soft);
+    margin:0 0 14px;
+  }
+
+  .actions{
+    display:flex;
+    gap:10px;
+    margin-top:36px;
+  }
+  .actions button{
+    flex:1;
+    padding:12px;
+    font-size:13px;
+    font-family:'Noto Sans JP', sans-serif;
+    font-weight:700;
+    border:1px solid var(--ink);
+    background:transparent;
+    color:var(--ink);
+    cursor:pointer;
+  }
+  .actions button:hover{ background:var(--ink); color:#fff; }
+
+  .footer-credit{
+    text-align:center;
+    font-family:'JetBrains Mono', monospace;
+    font-size:10.5px;
+    color:var(--ink-soft);
+    margin-top:22px;
+    letter-spacing:0.05em;
+  }
+
+  @media print{
+    body{ background:#fff; padding:0; }
+    .brandbar, .input-row, .hint, .actions{ display:none !important; }
+    .sheet{ box-shadow:none; border:none; max-width:100%; }
+    .sheet::before{ display:none; }
+  }
+
+  @media (max-width:560px){
+    .sheet-inner{ padding:28px 20px 32px; }
+    .input-row{ flex-direction:column; }
+    .title-block h1{ font-size:22px; }
+  }
+</style>
+</head>
+<body>
+
+  <div class="brandbar">
+    <div class="mark">EUPHONY</div>
+    <div class="sub">AIO / GEO DIAGNOSTIC</div>
+  </div>
+
+  <div class="sheet">
+    <div class="sheet-inner">
+
+      <div class="title-block">
+        <div class="eyebrow">AI OPTIMIZATION AUDIT</div>
+        <h1>AIO診断レポート</h1>
+        <p>URLを入力すると、サイトが「AIに理解・引用されやすい状態」かどうかを4つの観点から採点します。</p>
+      </div>
+
+      <div class="input-row">
+        <input id="urlInput" type="text" placeholder="https://example.com" autocomplete="off">
+        <button id="scanBtn">診断する</button>
+      </div>
+      <div class="hint">※ 対象サイトのCORS設定によっては公開プロキシ経由での取得となり、結果に若干のばらつきが出る場合があります。</div>
+
+      <div id="errorBox"></div>
+
+      <div id="loading">
+        <div class="scanlog" id="scanlog"></div>
+      </div>
+
+      <div id="report">
+        <div class="report-meta">
+          <span id="metaUrl">ANALYZED: —</span>
+          <span id="metaDate">DATE: —</span>
+        </div>
+
+        <div class="seal-wrap">
+          <div class="seal" id="seal">
+            <svg viewBox="0 0 200 200">
+              <defs>
+                <path id="circlePath" d="M 100,100 m -80,0 a 80,80 0 1,1 160,0 a 80,80 0 1,1 -160,0" />
+              </defs>
+              <circle cx="100" cy="100" r="92" fill="none" stroke="#A8342A" stroke-width="2"/>
+              <circle cx="100" cy="100" r="80" fill="none" stroke="#A8342A" stroke-width="1"/>
+              <text font-family="JetBrains Mono, monospace" font-size="10.5" letter-spacing="3" fill="#A8342A">
+                <textPath href="#circlePath" startOffset="2%">AIO DIAGNOSTIC AUDIT ・ EUPHONY ・</textPath>
+              </text>
+            </svg>
+            <div class="seal-score">
+              <div class="num" id="scoreNum">0</div>
+              <div class="den">/ 100</div>
+            </div>
+          </div>
+        </div>
+
+        <div id="categories"></div>
+
+        <hr class="div">
+
+        <div class="inspector">
+          <h2>INSPECTOR NOTES ー 診断詳細</h2>
+          <div id="inspectorNotes"></div>
+        </div>
+
+        <div class="actions">
+          <button id="printBtn">印刷 / PDF保存</button>
+          <button id="resetBtn">別のURLを診断</button>
+        </div>
+
+        <div class="footer-credit">PREPARED BY EUPHONY CO., LTD.</div>
+      </div>
+
+    </div>
+  </div>
+
+<script>
+(function(){
+  const urlInput = document.getElementById('urlInput');
+  const scanBtn = document.getElementById('scanBtn');
+  const loading = document.getElementById('loading');
+  const scanlog = document.getElementById('scanlog');
+  const errorBox = document.getElementById('errorBox');
+  const report = document.getElementById('report');
+  const printBtn = document.getElementById('printBtn');
+  const resetBtn = document.getElementById('resetBtn');
+
+  const CATS = [
+    { key:'structure', no:'01', name:'構造化データ・セマンティックHTML' },
+    { key:'eeat',       no:'02', name:'コンテンツの網羅性・E-E-A-T' },
+    { key:'geo',        no:'03', name:'AI引用されやすさ(GEO)' },
+    { key:'tech',       no:'04', name:'技術的健全性' },
+  ];
+
+  function normalizeUrl(v){
+    v = v.trim();
+    if(!v) return null;
+    if(!/^https?:\/\//i.test(v)) v = 'https://' + v;
+    try{ new URL(v); return v; } catch(e){ return null; }
+  }
+
+  async function fetchViaProxies(target){
+    const proxies = [
+      u => 'https://corsproxy.io/?url=' + encodeURIComponent(u),
+      u => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u),
+      u => 'https://thingproxy.freeboard.io/fetch/' + u,
+      u => 'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(u),
+      u => u, // last resort: direct (works only if target sends CORS headers)
+    ];
+    let lastErr = null;
+    for(const build of proxies){
+      try{
+        const controller = new AbortController();
+        const timeout = setTimeout(()=>controller.abort(), 12000);
+        const res = await fetch(build(target), { cache:'no-store', signal: controller.signal });
+        clearTimeout(timeout);
+        if(!res.ok) { lastErr = new Error('HTTP '+res.status); continue; }
+        const text = await res.text();
+        if(text && text.length > 50) return text;
+        lastErr = new Error('空のレスポンス');
+      }catch(e){ lastErr = e; }
+    }
+    throw lastErr || new Error('取得に失敗しました');
+  }
+
+  async function fetchTextSilently(target){
+    try{ return await fetchViaProxies(target); }catch(e){ return null; }
+  }
+
+  function logLine(text, ok){
+    const div = document.createElement('div');
+    if(ok) div.className='ok';
+    div.textContent = (ok ? '✓ ' : '… ') + text;
+    scanlog.appendChild(div);
+  }
+
+  function wordCount(str){
+    const trimmed = (str||'').replace(/\s+/g,'');
+    return trimmed.length; // 日本語文字数ベースでカウント
+  }
+
+  function scoreStructure(doc){
+    const notes = []; let score = 0;
+    const ld = doc.querySelectorAll('script[type="application/ld+json"]');
+    let validLd = 0;
+    ld.forEach(s=>{ try{ JSON.parse(s.textContent); validLd++; }catch(e){} });
+    if(validLd > 0){ score += 10; notes.push(['pass', '構造化データ(JSON-LD)が実装されています('+validLd+'件)']); }
+    else { notes.push(['fail', 'JSON-LD構造化データが見つかりません。AIエンジンがページの意味を機械的に把握しづらい状態です']); }
+
+    const semTags = ['header','nav','main','article','section','footer','aside'];
+    const used = semTags.filter(t => doc.querySelector(t));
+    const semScore = Math.round((used.length/semTags.length)*8);
+    score += semScore;
+    if(used.length >= 5) notes.push(['pass', 'セマンティックHTML('+used.join('/')+')が概ね使われています']);
+    else if(used.length > 0) notes.push(['warn', 'セマンティックタグの使用が一部にとどまっています('+used.length+'/7種)']);
+    else notes.push(['fail', 'div中心のマークアップで、意味構造がHTML上に表れていません']);
+
+    const h1s = doc.querySelectorAll('h1');
+    const h2s = doc.querySelectorAll('h2');
+    let headScore = 0;
+    if(h1s.length === 1) headScore += 4;
+    else if(h1s.length > 1) notes.push(['warn', 'h1タグが複数存在します('+h1s.length+'個)。見出し階層が曖昧になります']);
+    else notes.push(['fail', 'h1タグが見つかりません']);
+    if(h1s.length===1 && h2s.length>0){ headScore += 3; notes.push(['pass', '見出し階層(h1→h2)が構成されています']); }
+    score += headScore;
+
+    return { score, max:25, notes };
+  }
+
+  function scoreEEAT(doc, bodyText){
+    const notes = []; let score = 0;
+    const authorSel = doc.querySelector('[rel="author"], [itemprop="author"], .author, .byline, [class*="author"]');
+    if(authorSel){ score += 8; notes.push(['pass', '著者情報らしき要素が確認できます']); }
+    else notes.push(['fail', '著者・執筆者情報が明示されていません。E-E-A-T評価で不利になりやすい点です']);
+
+    const timeTag = doc.querySelector('time, meta[property="article:modified_time"], meta[property="article:published_time"]');
+    if(timeTag){ score += 7; notes.push(['pass', '公開日・更新日情報が確認できます']); }
+    else notes.push(['fail', '公開日・更新日の記載が見当たりません']);
+
+    const len = wordCount(bodyText);
+    let lenScore = 0;
+    if(len >= 800){ lenScore = 10; notes.push(['pass', '本文量は十分です(目安'+len+'文字)']); }
+    else if(len >= 400){ lenScore = 6; notes.push(['warn', '本文量はやや少なめです(目安'+len+'文字)']); }
+    else if(len >= 150){ lenScore = 3; notes.push(['warn', '本文量が少なく、内容の網羅性を示しにくい状態です(目安'+len+'文字)']); }
+    else notes.push(['fail', '本文量が極端に少なく、AIが十分な文脈を読み取れない可能性があります']);
+    score += lenScore;
+
+    return { score, max:25, notes };
+  }
+
+  function scoreGEO(doc, robotsTxt, llmsTxt){
+    const notes = []; let score = 0;
+
+    if(llmsTxt){ score += 6; notes.push(['pass', 'llms.txtが設置されています。AIエージェント向けの情報提供に積極的です']); }
+    else notes.push(['fail', 'llms.txtが見つかりません。AI向けの参照情報が整理されていない状態です']);
+
+    const desc = doc.querySelector('meta[name="description"]');
+    const descContent = desc ? desc.getAttribute('content') || '' : '';
+    if(descContent && descContent.length >= 50 && descContent.length <= 160){ score += 6; notes.push(['pass', 'meta descriptionが適切な長さで設定されています']); }
+    else if(descContent){ score += 3; notes.push(['warn', 'meta descriptionはありますが、長さが最適ではありません('+descContent.length+'文字)']); }
+    else notes.push(['fail', 'meta descriptionが設定されていません']);
+
+    const heads = Array.from(doc.querySelectorAll('h2, h3'));
+    const qHeads = heads.filter(h => /[?？]|とは|方法|理由|なぜ/.test(h.textContent));
+    if(qHeads.length > 0){ score += 6; notes.push(['pass', '疑問形・解説形式の見出しがあり、AIの回答生成に引用されやすい構造です']); }
+    else notes.push(['fail', '疑問形式の見出しが見当たらず、AIの回答に引用されにくい構造です']);
+
+    const firstP = doc.querySelector('p');
+    const firstPLen = firstP ? (firstP.textContent||'').trim().length : 0;
+    if(firstPLen >= 40 && firstPLen <= 200){ score += 4; notes.push(['pass', '冒頭に簡潔な要約段落があります']); }
+    else notes.push(['warn', '冒頭段落が要約として機能していない可能性があります']);
+
+    let robotsOpen = true;
+    if(robotsTxt){
+      const bots = ['GPTBot','ClaudeBot','Google-Extended','CCBot','anthropic-ai'];
+      const lower = robotsTxt.toLowerCase();
+      robotsOpen = !bots.some(b => {
+        const idx = lower.indexOf(b.toLowerCase());
+        if(idx === -1) return false;
+        const after = lower.slice(idx, idx+200);
+        return /disallow:\s*\/\s*$/m.test(after) || /disallow:\s*\/\s*\n/.test(after) || /disallow:\s*\/[\s]/.test(after);
+      });
+    }
+    if(robotsOpen){ score += 3; notes.push(['pass', '主要AIクローラーのアクセスをブロックしていません']); }
+    else notes.push(['fail', 'robots.txtで主要AIクローラーがブロックされています。AI検索経由の流入機会を失っている可能性があります']);
+
+    return { score, max:25, notes };
+  }
+
+  function scoreTech(doc){
+    const notes = []; let score = 0;
+
+    const title = doc.querySelector('title');
+    const titleLen = title ? title.textContent.trim().length : 0;
+    if(titleLen >= 10 && titleLen <= 60){ score += 6; notes.push(['pass', 'titleタグが適切な長さで設定されています']); }
+    else if(titleLen > 0){ score += 3; notes.push(['warn', 'titleタグはありますが長さが最適ではありません('+titleLen+'文字)']); }
+    else notes.push(['fail', 'titleタグが設定されていません']);
+
+    const viewport = doc.querySelector('meta[name="viewport"]');
+    if(viewport){ score += 5; notes.push(['pass', 'viewport設定によりモバイル表示に対応しています']); }
+    else notes.push(['fail', 'viewportの設定がなく、モバイル表示が最適化されていない可能性があります']);
+
+    const ogTitle = doc.querySelector('meta[property="og:title"]');
+    const ogDesc = doc.querySelector('meta[property="og:description"]');
+    if(ogTitle && ogDesc){ score += 5; notes.push(['pass', 'OGPタグが設定されており、SNS・チャットでの共有時にも情報が伝わります']); }
+    else notes.push(['fail', 'OGPタグが不足しており、共有時のプレビュー表示が最適化されていません']);
+
+    const imgs = Array.from(doc.querySelectorAll('img'));
+    if(imgs.length === 0){ score += 5; }
+    else{
+      const withAlt = imgs.filter(i => (i.getAttribute('alt')||'').trim().length > 0).length;
+      const ratio = withAlt/imgs.length;
+      if(ratio >= 0.8){ score += 5; notes.push(['pass', '画像のalt属性がおおむね設定されています('+Math.round(ratio*100)+'%)']); }
+      else if(ratio >= 0.5){ score += 3; notes.push(['warn', '画像のalt属性が一部未設定です('+Math.round(ratio*100)+'%)']); }
+      else notes.push(['fail', '画像のalt属性がほとんど設定されていません('+Math.round(ratio*100)+'%)']);
+    }
+
+    const lang = doc.documentElement.getAttribute('lang');
+    if(lang){ score += 4; notes.push(['pass', 'html要素にlang属性が設定されています']); }
+    else notes.push(['fail', 'lang属性が未設定で、言語判定が曖昧になる可能性があります']);
+
+    return { score, max:25, notes };
+  }
+
+  function renderReport(target, results){
+    document.getElementById('metaUrl').textContent = 'ANALYZED: ' + target;
+    const d = new Date();
+    document.getElementById('metaDate').textContent = 'DATE: ' + d.getFullYear() + '.' + String(d.getMonth()+1).padStart(2,'0') + '.' + String(d.getDate()).padStart(2,'0');
+
+    const total = CATS.reduce((sum,c)=> sum + results[c.key].score, 0);
+    document.getElementById('scoreNum').textContent = total;
+
+    const catsEl = document.getElementById('categories');
+    catsEl.innerHTML = '';
+    CATS.forEach(c=>{
+      const r = results[c.key];
+      const pct = Math.round((r.score/r.max)*100);
+      const wrap = document.createElement('div');
+      wrap.className = 'cat';
+      wrap.innerHTML = `
+        <div class="cat-head">
+          <div><span class="no">${c.no}</span><span class="name">${c.name}</span></div>
+          <div class="score">${r.score} / ${r.max}</div>
+        </div>
+        <div class="bar-track"><div class="bar-fill" data-pct="${pct}"></div></div>
+      `;
+      catsEl.appendChild(wrap);
+    });
+
+    const notesEl = document.getElementById('inspectorNotes');
+    notesEl.innerHTML = '';
+    CATS.forEach(c=>{
+      const r = results[c.key];
+      const section = document.createElement('div');
+      section.style.marginBottom = '16px';
+      const heading = document.createElement('div');
+      heading.style.cssText = 'font-family:JetBrains Mono, monospace; font-size:11px; color:#A6813C; margin-bottom:6px; letter-spacing:.05em;';
+      heading.textContent = c.no + ' ' + c.name;
+      section.appendChild(heading);
+      const ul = document.createElement('ul');
+      ul.className = 'notes';
+      r.notes.forEach(([type,text])=>{
+        const li = document.createElement('li');
+        li.className = type;
+        li.textContent = text;
+        ul.appendChild(li);
+      });
+      section.appendChild(ul);
+      notesEl.appendChild(section);
+    });
+
+    report.style.display = 'block';
+    requestAnimationFrame(()=>{
+      document.querySelectorAll('.bar-fill').forEach(el=>{ el.style.width = el.dataset.pct + '%'; });
+      document.getElementById('seal').classList.add('stamped');
+    });
+  }
+
+  async function runScan(){
+    const target = normalizeUrl(urlInput.value);
+    if(!target){ showError('URLの形式が正しくありません。'); return; }
+
+    report.style.display = 'none';
+    errorBox.style.display = 'none';
+    scanlog.innerHTML = '';
+    loading.style.display = 'block';
+    scanBtn.disabled = true;
+    scanBtn.textContent = '診断中…';
+
+    const steps = ['対象ページを取得中…','HTML構造を解析中…','構造化データを確認中…','コンテンツ量を計測中…','robots.txt / llms.txtを確認中…','スコアを集計中…'];
+    steps.forEach((s,i)=> setTimeout(()=> logLine(s), i*260));
+
+    try{
+      const [html, robotsTxt, llmsTxt] = await Promise.all([
+        fetchViaProxies(target),
+        fetchTextSilently(new URL('/robots.txt', target).toString()),
+        fetchTextSilently(new URL('/llms.txt', target).toString()),
+      ]);
+
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(html, 'text/html');
+      const bodyText = doc.body ? doc.body.textContent : '';
+
+      const results = {
+        structure: scoreStructure(doc),
+        eeat: scoreEEAT(doc, bodyText),
+        geo: scoreGEO(doc, robotsTxt, llmsTxt),
+        tech: scoreTech(doc),
+      };
+
+      await new Promise(r => setTimeout(r, steps.length*260 + 150));
+      logLine('診断完了', true);
+      await new Promise(r => setTimeout(r, 250));
+
+      loading.style.display = 'none';
+      renderReport(target, results);
+    }catch(e){
+      loading.style.display = 'none';
+      showError('対象サイトの取得に失敗しました。サイト側のアクセス制限、またはプロキシの一時的な不調の可能性があります。時間をおいて再度お試しください。(詳細: ' + (e && e.message ? e.message : '不明なエラー') + ')');
+    }finally{
+      scanBtn.disabled = false;
+      scanBtn.textContent = '診断する';
+    }
+  }
+
+  function showError(msg){
+    errorBox.textContent = msg;
+    errorBox.style.display = 'block';
+  }
+
+  scanBtn.addEventListener('click', runScan);
+  urlInput.addEventListener('keydown', e=>{ if(e.key==='Enter') runScan(); });
+  printBtn.addEventListener('click', ()=> window.print());
+  resetBtn.addEventListener('click', ()=>{
+    report.style.display = 'none';
+    urlInput.value = '';
+    urlInput.focus();
+  });
+})();
+</script>
+</body>
+</html>

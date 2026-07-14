@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AIO診断レポート | EUPHONY</title>
+<title>AIOページ診断 | EUPHONY</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@500;700&family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
@@ -253,6 +253,28 @@
   .notes li.pass::before{ content:"✓"; color:var(--good); }
   .notes li.warn::before{ content:"△"; color:var(--warn); }
   .notes li.fail::before{ content:"✗"; color:var(--bad); }
+  .notes li.info::before{ content:"ℹ"; color:var(--ink-soft); font-weight:400; }
+  .notes li.info{ color:var(--ink-soft); opacity:0.9; }
+
+  .kw-cloud{
+    display:flex;
+    flex-wrap:wrap;
+    align-items:baseline;
+    gap:8px 10px;
+  }
+  .kw-chip{
+    font-family:'JetBrains Mono', monospace;
+    background:#fff;
+    border:1px solid var(--rule);
+    padding:4px 10px;
+    color:var(--ink);
+    line-height:1.6;
+  }
+  .kw-chip .cnt{
+    color:var(--ink-soft);
+    font-size:0.72em;
+    margin-left:5px;
+  }
 
   hr.div{ border:none; border-top:1px dashed var(--rule); margin:28px 0; }
 
@@ -310,7 +332,7 @@
 
   <div class="brandbar">
     <div class="mark">EUPHONY</div>
-    <div class="sub">AIO / GEO DIAGNOSTIC</div>
+    <div class="sub">AIO / GEO DIAGNOSTIC ー SINGLE PAGE</div>
   </div>
 
   <div class="sheet">
@@ -318,15 +340,15 @@
 
       <div class="title-block">
         <div class="eyebrow">AI OPTIMIZATION AUDIT</div>
-        <h1>AIO診断レポート</h1>
-        <p>URLを入力すると、サイトが「AIに理解・引用されやすい状態」かどうかを4つの観点から採点します。</p>
+        <h1>AIOページ診断</h1>
+        <p>URLを1件入力すると、そのページが「AIに理解・引用されやすい状態」かどうかを4つの観点から採点します。個別ページ・LP単位での確認に。</p>
       </div>
 
       <div class="input-row">
-        <input id="urlInput" type="text" placeholder="https://example.com" autocomplete="off">
+        <input id="urlInput" type="text" placeholder="https://example.com/page" autocomplete="off">
         <button id="scanBtn">診断する</button>
       </div>
-      <div class="hint">※ 対象サイトのCORS設定によっては公開プロキシ経由での取得となり、結果に若干のばらつきが出る場合があります。</div>
+      <div class="hint">※ 診断したいページのURLをそのまま入力してください(トップページに限りません)。対象サイトのCORS設定によっては公開プロキシ経由での取得となり、結果に若干のばらつきが出る場合があります。</div>
 
       <div id="errorBox"></div>
 
@@ -360,6 +382,13 @@
         </div>
 
         <div id="categories"></div>
+
+        <hr class="div">
+
+        <div class="keywords-block">
+          <h2 style="font-family:'JetBrains Mono', monospace; font-size:11px; letter-spacing:0.18em; color:var(--ink-soft); margin:0 0 14px;">KEYWORDS ー 主要キーワード</h2>
+          <div class="kw-cloud" id="kwCloud"></div>
+        </div>
 
         <hr class="div">
 
@@ -472,25 +501,123 @@
     return { score, max:25, notes };
   }
 
-  function scoreEEAT(doc, bodyText){
+  const STOP_KEYWORDS = new Set([
+    'こと','もの','これ','それ','あれ','ため','よう','など','場合','以下','以上','こちら','そちら',
+    '当社','弊社','皆様','株式会社','有限会社','ページ','サイト','記事','クリック','詳細','詳しく',
+    'について','における','という','といった','および','及び','その他','なお','ただし','さらに','また'
+  ]);
+
+  function charType(ch){
+    const c = ch.codePointAt(0);
+    if(c>=0x4E00 && c<=0x9FFF) return 'kanji';
+    if(c>=0x3040 && c<=0x309F) return 'hira';
+    if(c>=0x30A0 && c<=0x30FF) return 'kata';
+    if(/[A-Za-z0-9]/.test(ch)) return 'alnum';
+    return 'other';
+  }
+
+  // 形態素解析は行わず、文字種(漢字/カタカナ/ひらがな/英数字)の切り替わりで
+  // 単語らしき塊に分割する簡易ロジック。助詞・活用語が中心のひらがな塊は除外することで、
+  // 名詞・固有名詞・カタカナ語(≒キーワードになりやすい語)を中心に抽出する。
+  function extractKeywords(text, limit){
+    limit = limit || 10;
+    const chars = Array.from(text || '');
+    const chunks = [];
+    let cur = '', curType = null;
+    for(const ch of chars){
+      const t = charType(ch);
+      if(t === 'other'){ if(cur){ chunks.push([cur,curType]); cur=''; curType=null; } continue; }
+      if(t === curType){ cur += ch; }
+      else{ if(cur) chunks.push([cur,curType]); cur = ch; curType = t; }
+    }
+    if(cur) chunks.push([cur,curType]);
+
+    const freq = new Map();
+    chunks.forEach(([word,type])=>{
+      if(type === 'hira') return;
+      if(word.length < 2) return;
+      if(type === 'alnum' && word.length < 3) return;
+      if(/^[0-9]+$/.test(word)) return;
+      if(STOP_KEYWORDS.has(word)) return;
+      freq.set(word, (freq.get(word)||0) + 1);
+    });
+
+    return Array.from(freq.entries())
+      .sort((a,b)=> b[1]-a[1])
+      .slice(0, limit)
+      .map(([word,count])=>({word,count}));
+  }
+
+  function scoreKeywordConsistency(keywords, titleText, metaDescText, h1Text, firstPText){
+    const top = keywords.slice(0,3).map(k=>k.word);
+    if(top.length === 0){
+      return { score:0, note:['fail', '本文からキーワードを抽出できず、主題の一貫性を確認できませんでした'] };
+    }
+    const locations = [
+      ['タイトル', titleText||''],
+      ['meta description', metaDescText||''],
+      ['h1', h1Text||''],
+      ['冒頭段落', firstPText||''],
+    ];
+    let hit = 0; const hitNames = [];
+    locations.forEach(([name,text])=>{
+      if(top.some(k=> text.includes(k))){ hit++; hitNames.push(name); }
+    });
+    const score = Math.round((hit/4)*8);
+    let note;
+    if(hit>=3) note = ['pass', '主要キーワード(' + top.join('/') + ')が' + hitNames.join('・') + 'に一貫して登場しています'];
+    else if(hit>=1) note = ['warn', '主要キーワード(' + top.join('/') + ')の反映が限定的です(' + hitNames.join('・') + 'のみ)'];
+    else note = ['fail', '本文の主要キーワード(' + top.join('/') + ')がタイトルや見出しに反映されておらず、AIが主題を把握しにくい可能性があります'];
+    return { score, note };
+  }
+
+  function scoreEEAT(doc, bodyText, pageUrl){
     const notes = []; let score = 0;
     const authorSel = doc.querySelector('[rel="author"], [itemprop="author"], .author, .byline, [class*="author"]');
-    if(authorSel){ score += 8; notes.push(['pass', '著者情報らしき要素が確認できます']); }
+    if(authorSel){ score += 6; notes.push(['pass', '著者情報らしき要素が確認できます']); }
     else notes.push(['fail', '著者・執筆者情報が明示されていません。E-E-A-T評価で不利になりやすい点です']);
 
     const timeTag = doc.querySelector('time, meta[property="article:modified_time"], meta[property="article:published_time"]');
-    if(timeTag){ score += 7; notes.push(['pass', '公開日・更新日情報が確認できます']); }
+    if(timeTag){ score += 5; notes.push(['pass', '公開日・更新日情報が確認できます']); }
     else notes.push(['fail', '公開日・更新日の記載が見当たりません']);
 
     const len = wordCount(bodyText);
     let lenScore = 0;
-    if(len >= 800){ lenScore = 10; notes.push(['pass', '本文量は十分です(目安'+len+'文字)']); }
-    else if(len >= 400){ lenScore = 6; notes.push(['warn', '本文量はやや少なめです(目安'+len+'文字)']); }
-    else if(len >= 150){ lenScore = 3; notes.push(['warn', '本文量が少なく、内容の網羅性を示しにくい状態です(目安'+len+'文字)']); }
+    if(len >= 800){ lenScore = 6; notes.push(['pass', '本文量は十分です(目安'+len+'文字)']); }
+    else if(len >= 400){ lenScore = 4; notes.push(['warn', '本文量はやや少なめです(目安'+len+'文字)']); }
+    else if(len >= 150){ lenScore = 2; notes.push(['warn', '本文量が少なく、内容の網羅性を示しにくい状態です(目安'+len+'文字)']); }
     else notes.push(['fail', '本文量が極端に少なく、AIが十分な文脈を読み取れない可能性があります']);
     score += lenScore;
 
-    return { score, max:25, notes };
+    const keywords = extractKeywords(bodyText, 10);
+    const titleText = (doc.querySelector('title')||{}).textContent || '';
+    const metaDescText = (doc.querySelector('meta[name="description"]')||{}).getAttribute
+      ? (doc.querySelector('meta[name="description"]').getAttribute('content') || '')
+      : '';
+    const h1Text = (doc.querySelector('h1')||{}).textContent || '';
+    const firstPText = (doc.querySelector('p')||{}).textContent || '';
+    const kw = scoreKeywordConsistency(keywords, titleText, metaDescText, h1Text, firstPText);
+    score += kw.score;
+    notes.push(kw.note);
+
+    const origin = (()=>{ try{ return new URL(pageUrl).origin; }catch(e){ return null; } })();
+    let internalCount = 0, externalCount = 0;
+    doc.querySelectorAll('a[href]').forEach(a=>{
+      const href = a.getAttribute('href') || '';
+      if(!href || href.startsWith('#') || href.startsWith('mailto:') || href.startsWith('tel:') || href.startsWith('javascript:')) return;
+      try{
+        const abs = new URL(href, pageUrl);
+        if(origin && abs.origin === origin) internalCount++; else externalCount++;
+      }catch(e){}
+    });
+    notes.push(['info', '内部リンク ' + internalCount + '件 / 外部リンク ' + externalCount + '件(参考値・採点対象外)']);
+
+    const structParts = [];
+    if(doc.querySelector('ul, ol')) structParts.push('リスト');
+    if(doc.querySelector('table')) structParts.push('テーブル');
+    notes.push(['info', (structParts.length ? structParts.join('・') + 'が使用されています' : 'リスト・テーブルの使用は見当たりません') + '(AIが情報抽出しやすい構造の目安・採点対象外)']);
+
+    return { score, max:25, notes, keywords };
   }
 
   function scoreGEO(doc, robotsTxt, llmsTxt){
@@ -567,6 +694,30 @@
     return { score, max:25, notes };
   }
 
+  function renderKeywordCloud(keywords){
+    const el = document.getElementById('kwCloud');
+    el.innerHTML = '';
+    if(!keywords || keywords.length === 0){
+      el.innerHTML = '<div style="font-size:12px;color:var(--ink-soft);">キーワードを抽出できませんでした</div>';
+      return;
+    }
+    const counts = keywords.map(k=>k.count);
+    const max = Math.max(...counts), min = Math.min(...counts);
+    keywords.forEach(k=>{
+      const ratio = max===min ? 1 : (k.count - min)/(max-min);
+      const size = 12 + ratio*10;
+      const span = document.createElement('span');
+      span.className = 'kw-chip';
+      span.style.fontSize = size.toFixed(1) + 'px';
+      span.textContent = k.word;
+      const cnt = document.createElement('span');
+      cnt.className = 'cnt';
+      cnt.textContent = k.count;
+      span.appendChild(cnt);
+      el.appendChild(span);
+    });
+  }
+
   function renderReport(target, results){
     document.getElementById('metaUrl').textContent = 'ANALYZED: ' + target;
     const d = new Date();
@@ -574,6 +725,8 @@
 
     const total = CATS.reduce((sum,c)=> sum + results[c.key].score, 0);
     document.getElementById('scoreNum').textContent = total;
+
+    renderKeywordCloud(results.eeat.keywords);
 
     const catsEl = document.getElementById('categories');
     catsEl.innerHTML = '';
@@ -648,7 +801,7 @@
 
       const results = {
         structure: scoreStructure(doc),
-        eeat: scoreEEAT(doc, bodyText),
+        eeat: scoreEEAT(doc, bodyText, target),
         geo: scoreGEO(doc, robotsTxt, llmsTxt),
         tech: scoreTech(doc),
       };
